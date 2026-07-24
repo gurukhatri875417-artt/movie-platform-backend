@@ -16,7 +16,7 @@ app.get('/', (req, res) => {
   res.send('Movie Platform API is Live!');
 });
 
-// Admin Web Form to Add Movies
+// Admin Web Form to Add Movies (With Thumbnail Field)
 app.get('/add-movie', (req, res) => {
   res.send(`
     <!DOCTYPE html>
