@@ -1,135 +1,22 @@
 const express = require('express');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
+const jwt = require('jwt-simple');
 
 const app = express();
 const prisma = new PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-fallback-secret-key';
-
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// 1. Root Health Check Endpoint
+// Root test route
 app.get('/', (req, res) => {
-  res.status(200).send('API is live!');
+  res.send('Movie Platform API is Live!');
 });
 
-// 2. User Signup Route
-app.post('/signup', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
-    }
-
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({ error: 'User already exists' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newUser = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-      },
-    });
-
-    res.status(201).json({ message: 'User created successfully', userId: newUser.id });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 3. User Login Route
-app.post('/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      return res.status(400).json({ error: 'Invalid email or password' });
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ error: 'Invalid email or password' });
-    }
-
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
-      expiresIn: '7d',
-    });
-
-    res.json({ message: 'Login successful', token });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 4. Get All Users Route
-app.get('/users', async (req, res) => {
-  try {
-    const users = await prisma.user.findMany({
-      select: { id: true, email: true, createdAt: true },
-    });
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 5. Get All Movies Route
-app.get('/movies', async (req, res) => {
-  try {
-    const movies = await prisma.movie.findMany();
-    res.json(movies);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 6. Get Single Movie by ID Route
-app.get('/movies/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const movie = await prisma.movie.findUnique({ where: { id } });
-
-    if (!movie) {
-      return res.status(404).json({ error: 'Movie not found' });
-    }
-
-    res.json(movie);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 7. Create a New Movie Route
-app.post('/movies', async (req, res) => {
-  try {
-    const { title, description, videoUrl, thumbnailUrl, genre } = req.body;
-
-    if (!title || !videoUrl) {
-      return res.status(400).json({ error: 'Title and videoUrl are required' });
-    }
-
-    const movie = await prisma.movie.create({
-      data: { title, description, videoUrl, thumbnailUrl, genre },
-    });
-
-    res.status(201).json(movie);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// 8. Add-Movie Web Form Route
+// Admin Web Form to Add Movies
 app.get('/add-movie', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -137,10 +24,12 @@ app.get('/add-movie', (req, res) => {
     <head>
       <title>Add Movie</title>
       <style>
-        body { font-family: sans-serif; padding: 40px; background: #f4f4f9; }
-        .card { background: white; padding: 20px; border-radius: 8px; max-width: 400px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button { width: 100%; padding: 10px; background: #0070f3; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        body { font-family: sans-serif; padding: 40px; background: #141414; color: white; }
+        .card { background: #1f1f1f; padding: 25px; border-radius: 8px; max-width: 400px; margin: 0 auto; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        h2 { color: #e50914; margin-bottom: 15px; }
+        input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #333; background: #2a2a2a; color: white; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #e50914; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button:hover { background: #f40612; }
       </style>
     </head>
     <body>
@@ -149,6 +38,7 @@ app.get('/add-movie', (req, res) => {
         <form onsubmit="event.preventDefault(); submitForm();">
           <input id="title" placeholder="Movie Title" required />
           <input id="videoUrl" placeholder="Video URL (.mp4)" required />
+          <input id="thumbnailUrl" placeholder="Poster Image URL (.jpg / .png)" />
           <input id="genre" placeholder="Genre (e.g. Action, Drama)" />
           <button type="submit">Add Movie</button>
         </form>
@@ -157,12 +47,13 @@ app.get('/add-movie', (req, res) => {
         async function submitForm() {
           const title = document.getElementById('title').value;
           const videoUrl = document.getElementById('videoUrl').value;
+          const thumbnailUrl = document.getElementById('thumbnailUrl').value;
           const genre = document.getElementById('genre').value;
           
           const res = await fetch('/movies', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, videoUrl, genre })
+            body: JSON.stringify({ title, videoUrl, thumbnailUrl, genre })
           });
           
           if (res.ok) {
@@ -178,8 +69,56 @@ app.get('/add-movie', (req, res) => {
   `);
 });
 
-// Port Binding for Render Deployment
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server listening on port ${PORT}`);
+// GET all movies
+app.get('/movies', async (req, res) => {
+  try {
+    const movies = await prisma.movie.findMany();
+    res.json(movies);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch movies' });
+  }
 });
+
+// POST a new movie
+app.post('/movies', async (req, res) => {
+  try {
+    const { title, description, videoUrl, thumbnailUrl, genre } = req.body;
+    const movie = await prisma.movie.create({
+      data: { title, description, videoUrl, thumbnailUrl, genre }
+    });
+    res.status(201).json(movie);
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to create movie' });
+  }
+});
+
+// User Auth Routes
+app.post('/signup', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: { email, password: hashedPassword }
+    });
+    res.status(201).json({ id: user.id, email: user.email });
+  } catch (err) {
+    res.status(400).json({ error: 'User registration failed' });
+  }
+});
+
+app.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    const token = jwt.encode({ userId: user.id }, JWT_SECRET);
+    res.json({ token });
+  } catch (err) {
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
