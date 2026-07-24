@@ -4,17 +4,5 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-
-}
-
-model Movie {
-  id          String   @id @default(uuid())
-  title       String
-  description String
-  posterUrl   String
-  streamUrl   String
-  downloadUrl String
-  genre       String   @default("Sci-Fi")
-  quality     String   @default("1080p Ultra HD")
-  createdAt   DateTime @default(now())
+  url      = env("DATABASE_URL")
 }

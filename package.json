@@ -23,5 +23,8 @@
     "jsonwebtoken": "^9.0.3",
     "redis": "^6.1.0",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
   }
 }
