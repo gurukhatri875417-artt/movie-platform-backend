@@ -5,7 +5,7 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// Enable CORS and JSON parsing middleware
 app.use(cors());
 app.use(express.json());
 
@@ -14,7 +14,7 @@ app.get('/', (req, res) => {
   res.send('Movie Platform Backend is running successfully!');
 });
 
-// Temporary /movies route so frontend works while you set up Prisma
+// Temporary /movies route for frontend testing
 app.get('/movies', (req, res) => {
   res.json([
     { id: 1, title: 'Inception' },
