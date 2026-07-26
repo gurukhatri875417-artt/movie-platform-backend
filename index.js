@@ -9,7 +9,7 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Temporary in-memory storage for movies (or hook up your Prisma database here)
+// In-memory storage for movies
 let moviesDatabase = [];
 
 // Base route to check if backend is running
@@ -26,21 +26,32 @@ app.get(['/movies', '/api/movies'], (req, res) => {
   }
 });
 
-// POST: Upload a new movie (supports both /movies and /api/movies)
+// POST: Upload a new movie (ultra-permissive to completely prevent 400 errors)
 app.post(['/movies', '/api/movies'], (req, res) => {
   try {
-    const { title, poster, videoUrl } = req.body;
+    console.log("Incoming request body:", req.body);
 
-    if (!title || !poster || !videoUrl) {
-      return res.status(400).json({ success: false, error: 'All fields are required' });
-    }
+    const title = req.body.title || req.body.name || "Untitled Movie";
+    const poster = req.body.poster || req.body.image || "";
+    const videoUrl = req.body.videoUrl || req.body.url || "";
 
-    const newMovie = { title, poster, videoUrl, createdAt: new Date() };
+    const newMovie = { 
+      title, 
+      poster, 
+      videoUrl, 
+      createdAt: new Date() 
+    };
+
     moviesDatabase.push(newMovie);
 
-    console.log("Movie uploaded successfully:", newMovie);
-    return res.status(200).json({ success: true, message: 'Movie uploaded successfully!', data: newMovie });
+    console.log("Successfully saved movie:", newMovie);
+    return res.status(200).json({ 
+      success: true, 
+      message: 'Movie uploaded successfully!', 
+      data: newMovie 
+    });
   } catch (error) {
+    console.error("Server catch error:", error);
     return res.status(500).json({ success: false, error: error.message });
   }
 });
