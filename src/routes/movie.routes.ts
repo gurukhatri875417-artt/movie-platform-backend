@@ -1,78 +1,53 @@
-import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
-import Redis from 'ioredis';
-import http from 'http';
-import https from 'https';
+import { Router, Request, Response } from 'express';
+import Movie from '../models/Movie';
 
 const router = Router();
-const prisma = new PrismaClient();
-const redis = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6379');
 
-router.get('/', async (req, res) => {
+// GET all movies
+router.get('/', async (req: Request, res: Response) => {
   try {
-    const { search = '', genre = 'All' } = req.query;
-    const cacheKey = `movies:search=${search}:genre=${genre}`;
-
-    /* 1. Check Redis Cache */
-    const cachedData = await redis.get(cacheKey);
-    if (cachedData) {
-      return res.json({ success: true, data: JSON.parse(cachedData), source: 'redis' });
-    }
-
-    /* 2. Fallback to PostgreSQL */
-    const where: any = {};
-    if (search && typeof search === 'string') {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } }
-      ];
-    }
-    if (genre && typeof genre === 'string' && genre !== 'All') {
-      where.genre = { equals: genre, mode: 'insensitive' };
-    }
-
-    const movies = await prisma.movie.findMany({ where, orderBy: { createdAt: 'desc' } });
-
-    /* 3. Cache response in Redis for 60 seconds */
-    await redis.setex(cacheKey, 60, JSON.stringify(movies));
-
-    res.json({ success: true, data: movies, source: 'postgres' });
+    const movies = await Movie.find().sort({ createdAt: -1 });
+    res.json(movies);
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch movies', error });
+    res.status(500).json({ error: 'Failed to fetch movies' });
   }
 });
 
-router.get('/:id', async (req, res) => {
+// GET single movie by ID
+router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const cacheKey = `movie:${id}`;
-    const cached = await redis.get(cacheKey);
-    if (cached) return res.json({ success: true, data: JSON.parse(cached), source: 'redis' });
-
-    const movie = await prisma.movie.findUnique({ where: { id } });
-    if (!movie) return res.status(404).json({ success: false, message: 'Movie not found' });
-
-    await redis.setex(cacheKey, 300, JSON.stringify(movie));
-    res.json({ success: true, data: movie, source: 'postgres' });
+    const movie = await Movie.findById(req.params.id);
+    if (!movie) return res.status(404).json({ error: 'Movie not found' });
+    res.json(movie);
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error fetching movie', error });
+    res.status(500).json({ error: 'Failed to fetch movie details' });
   }
 });
 
-router.get('/:id/download', async (req, res) => {
+// POST new movie (Updated to accept download links)
+router.post('/', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const movie = await prisma.movie.findUnique({ where: { id } });
-    if (!movie || !movie.downloadUrl) return res.status(404).send('File not found');
+    const { 
+      title, 
+      posterUrl, 
+      videoUrl, 
+      downloadUrl720p, 
+      downloadUrl1080p 
+    } = req.body;
 
-    const sanitizedTitle = movie.title.replace(/[^a-zA-Z0-9]/g, '_');
-    res.setHeader('Content-Disposition', `attachment; filename="${sanitizedTitle}.mp4"`);
-    res.setHeader('Content-Type', 'video/mp4');
+    const newMovie = new Movie({
+      title,
+      posterUrl,
+      videoUrl,
+      downloadUrl720p: downloadUrl720p || '',
+      downloadUrl1080p: downloadUrl1080p || '',
+    });
 
-    const client = movie.downloadUrl.startsWith('https') ? https : http;
-    client.get(movie.downloadUrl, (stream) => { stream.pipe(res); });
+    const savedMovie = await newMovie.save();
+    res.status(201).json(savedMovie);
   } catch (error) {
-    res.status(500).send('Failed to download');
+    console.error('Error saving movie:', error);
+    res.status(500).json({ error: 'Failed to create movie' });
   }
 });
 
